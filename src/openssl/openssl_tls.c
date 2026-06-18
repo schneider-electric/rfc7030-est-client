@@ -30,35 +30,50 @@ bool_t tls_unique(TransportInterface_t  *tint, char *output, size_t *len, ESTErr
 }
 
 int32_t tls_recv( NetworkContext_t * pNetworkContext, void * pBuffer, size_t bytesToRecv ) {
+    if (pBuffer == NULL || bytesToRecv == 0 || pNetworkContext == NULL || bytesToRecv > INT32_MAX) 
+    {
+        LOG_DEBUG(("Invalid input parameters\n"));
+        return EST_FALSE;
+    }
     OpenSSL_NetworkContext_t *octx = (OpenSSL_NetworkContext_t *)pNetworkContext;
 
     int32_t rb = 0;
     int32_t total = 0; 
     char *tmp = (char *)pBuffer;
-    size_t to_read = bytesToRecv / 2;
 
     do {
-        rb = BIO_read(octx->conn, tmp, to_read);
+        size_t remaining = bytesToRecv - total;
+        rb = BIO_read(octx->conn, tmp, remaining);
 
         if(rb != -1) {
             tmp = tmp + rb;
             total = total + rb;
 
-            LOG_DEBUG(("Read %d\n", rb))
-            LOG_DEBUG(("Total %d\n", total))   
+            LOG_DEBUG(("Read %d\n", rb));
+            LOG_DEBUG(("Total %d\n", total));
         }
-    }while((rb > 0 || BIO_should_read(octx->conn)) && (total + to_read) < bytesToRecv );
+    }while((rb > 0 || BIO_should_read(octx->conn)) && total < bytesToRecv );
 
     return total;
 }
 
 int32_t tls_send( NetworkContext_t * pNetworkContext, const void * pBuffer, size_t bytesToSend ) {
+    if (pBuffer == NULL || bytesToSend == 0 || pNetworkContext == NULL || bytesToSend > INT32_MAX) 
+    {
+        LOG_DEBUG(("Invalid input parameters\n"));
+        return EST_FALSE;
+    }
     OpenSSL_NetworkContext_t *octx = (OpenSSL_NetworkContext_t *)pNetworkContext;
     return BIO_write(octx->conn, pBuffer, bytesToSend);
 }
 
 bool_t tls_init(const char *host, const char *tls_host, const ESTAuthData_t *auth, ESTCertificate_t **chain, size_t chain_len, bool_t skip_verify, TransportInterface_t *tint, ESTError_t *err) {
-    LOG_INFO(("init tls channel with openssl\n"))
+    if (!host || !tls_host || !auth || !chain || chain_len == 0 || !tint || !err) {
+        LOG_DEBUG(("Invalid input parameters\n"));
+        return EST_FALSE;
+    }
+
+    LOG_INFO(("init tls channel with openssl\n"));
 
     const SSL_METHOD *method = TLS_client_method(); /* Create new client-method instance */
     SSL_CTX *ctx = SSL_CTX_new(method);
@@ -113,7 +128,7 @@ bool_t tls_init(const char *host, const char *tls_host, const ESTAuthData_t *aut
         SSL_CTX_use_certificate(ctx, (X509 *)auth->certAuth.certificate);
         SSL_CTX_use_PrivateKey(ctx, (EVP_PKEY *)auth->certAuth.privateKey);
     }
-    
+
     LOG_DEBUG(("Prepare connect\n"))
     BIO *conn = BIO_new_ssl_connect(ctx);
     if(!conn) {
