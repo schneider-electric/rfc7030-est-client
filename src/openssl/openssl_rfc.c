@@ -2,19 +2,25 @@
 
 static bool_t load_csr(void *ctx, const char *tlsunique, size_t tlsunique_len, byte_t *csr, size_t *csr_len, ESTError_t *err) {
     if (ctx == NULL || csr == NULL || csr_len == NULL) {
-        LOG_ERROR(("Invalid parameters: ctx, csr, or csr_len is NULL\n"))
+        LOG_ERROR(("Invalid parameters: ctx, csr, or csr_len is NULL\n"));
         return EST_FALSE;
     }
-    
-    char *csr_ctx = (char *)ctx;
-    // Use strnlen to safely bound length check, avoiding unterminated string scan
+
+    char  *csr_ctx = (char *)ctx;
+    size_t buf_cap = *csr_len;
     size_t csr_ctx_len = strnlen(csr_ctx, EST_CSR_MAX_LEN);
-    
+
     if (csr_ctx_len >= EST_CSR_MAX_LEN) {
-        LOG_ERROR(("CSR length exceeds maximum allowed size or not null-terminated\n"))
+        LOG_ERROR(("CSR length exceeds maximum or not null-terminated\n"));
         return EST_FALSE;
     }
-    
+
+    /* Need room for the data AND the NUL terminator. */
+    if (buf_cap == 0 || csr_ctx_len > buf_cap - 1) {
+        LOG_ERROR(("Output buffer too small: need %zu, have %zu\n", csr_ctx_len + 1, buf_cap));
+        return EST_FALSE;
+    }
+
     memcpy(csr, csr_ctx, csr_ctx_len);
     csr[csr_ctx_len] = '\0';
     *csr_len = csr_ctx_len;
@@ -51,14 +57,16 @@ bool_t parse_p12(const char *p12, size_t p12_len, const char *password, ESTAuthD
 }
 
 bool_t parse_basicauth(const char *userpassword, ESTAuthData_t *auth, ESTError_t *err) {
-    if (userpassword == NULL) {
-        LOG_ERROR(("User password is NULL\n"))
+    if (userpassword == NULL || auth == NULL) {
+        LOG_ERROR(("Invalid parameters\n"));
         return EST_FALSE;
     }
 
     size_t userpassword_len = strlen(userpassword);
-    if(!EVP_EncodeBlock((unsigned char *)auth->basicAuth.b64secret, (const unsigned char *)userpassword, userpassword_len)) {
-        est_error_set_custom(err, ERROR_SUBSYSTEM_X509, EST_ERROR_X509_B64, ERR_get_error(), "Failed to convert basic auth to base64 format");
+
+    int written = EVP_EncodeBlock((unsigned char *)auth->basicAuth.b64secret, (const unsigned char *)userpassword, (int)userpassword_len);
+    if (written < 0) {
+        est_error_set_custom(err, ERROR_SUBSYSTEM_X509, EST_ERROR_X509_B64, ERR_get_error(), "Failed to base64-encode basic auth");
         oss_print_error();
         return EST_FALSE;
     }

@@ -83,6 +83,11 @@ bool_t x509_pkcs7_free(ESTPKCS7_t *output) {
 }
 
 size_t x509_pkcs7_get_certificates(ESTPKCS7_t *p7, ESTCertificate_t ***output, ESTError_t *err) {
+    if(p7 == NULL || output == NULL) {
+        if(err) est_error_set_custom(err, ERROR_SUBSYSTEM_X509, EST_ERROR_X509_PKCS7_PARSE, 0, "Invalid arguments to pkcs7_get_certificates");
+        return 0;
+    }
+
     PKCS7 *pkcs7 = (PKCS7 *)p7;
 
     STACK_OF(X509) *certs = NULL;
@@ -113,16 +118,27 @@ size_t x509_pkcs7_get_certificates(ESTPKCS7_t *p7, ESTCertificate_t ***output, E
         return 0;
     }
 
-    // Copy all certificates in the response array
-    X509 **array = (X509 **)malloc(sizeof(X509 *) * numcerts);
+    // Copy all certificates in the response array (calloc so partial-failure cleanup is safe)
+    X509 **array = (X509 **)calloc((size_t)numcerts, sizeof(X509 *));
     if(array == NULL) {
         est_error_set_custom(err, ERROR_SUBSYSTEM_X509, EST_ERROR_X509_PKCS7_PARSE, 0, "Failed to allocate memory for certificates");
         return 0;
     }
 
-    for(int i = 0; certs && i < sk_X509_num(certs); i++) {
+    for(int i = 0; i < numcerts; i++) {
         X509 *cert = sk_X509_value(certs, i);
         array[i] = X509_dup(cert);
+        if(array[i] == NULL) {
+            // Duplication failed (OOM or malformed cert from untrusted source).
+            // Free everything duped so far to avoid leaks and a NULL-bearing array.
+            for(int j = 0; j < i; j++) {
+                X509_free(array[j]);
+            }
+            free(array);
+            est_error_set_custom(err, ERROR_SUBSYSTEM_X509, EST_ERROR_X509_PKCS7_PARSE, ERR_get_error(), "Failed to duplicate certificate from PKCS7");
+            oss_print_error();
+            return 0;
+        }
     }
 
     *output = (ESTCertificate_t **)array;
@@ -304,7 +320,7 @@ ESTCSR_t * x509_csr_parse(byte_t *pem, int pem_bytes_len, ESTError_t *err) {
     X509_REQ *req = NULL;
     BIO *bio = NULL;
 
-    if (pem == NULL || pem_bytes_len < 1)
+    if (pem == NULL || pem_bytes_len < 1 || pem_bytes_len > MAX_CSR_SIZE)
     {
         LOG_ERROR(("Invalid input to CSR parse\n"));
         return NULL;

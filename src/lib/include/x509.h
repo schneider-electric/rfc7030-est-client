@@ -11,6 +11,9 @@
 /* Maximum size of PKCS7 data (10MB) to prevent memory exhaustion attacks */
 #define MAX_PKCS7_SIZE (10 * 1024 * 1024)
 
+/* Maximum size of CSR data (1MB) to prevent memory exhaustion attacks */
+#define MAX_CSR_SIZE (1 * 1024 * 1024)
+
 /* Incomplete type for X.509 certificate.
  This type must refer to a host-specific X.509 implementation privided
  by the caller.*/

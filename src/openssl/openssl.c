@@ -73,7 +73,7 @@ void oss_load_implicit_ta(const char *chain_pem, ESTClient_Options_t *opts) {
     BIO *mem = BIO_new(BIO_s_mem());
     BIO_write(mem, chain_pem, chain_pem_len);
 
-    size_t chain_mem_len = 100; // very very large, impossibile to have a huge chain like this!
+    size_t chain_mem_len = 10;
     opts->chain = (ESTCertificate_t **)malloc(sizeof(ESTCertificate_t *) * chain_mem_len);
     if (opts->chain == NULL) {
         LOG_ERROR(("Memory allocation failed\n"))

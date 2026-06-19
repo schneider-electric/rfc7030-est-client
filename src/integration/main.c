@@ -18,39 +18,47 @@ bool_t is_issuer(ESTCertificate_t *issuer, ESTCertificate_t *crt);
 bool_t pop_create_csr(void *ctx, const char *tlsunique, size_t tlsunique_len, byte_t *csr, size_t *csr_len, ESTError_t *err);
 
 static size_t read_file(const char *name, const char *flags, char *output, size_t buffer_size) {
-    if (name == NULL || output == NULL) {
-        return 0;
-    }
-    FILE *fp = fopen(name, flags);
-    if(!fp) {        
-        LOG_ERROR(("Failed to open %s from resource file\n", name))
-        exit(EXIT_FAILURE);
+    if (name == NULL || output == NULL || buffer_size == 0) {
+        return EST_FALSE;
     }
 
-    fseek(fp, 0L, SEEK_END);
+    FILE *fp = fopen(name, flags);
+    if (!fp) {
+        LOG_ERROR(("Failed to open %s\n", name));
+        return EST_FALSE;
+    }
+
+    if (fseek(fp, 0L, SEEK_END) != 0) {
+        LOG_ERROR(("fseek failed for %s\n", name));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
     long fp_size = ftell(fp);
     if (fp_size < 0) {
         LOG_ERROR(("ftell failed for %s\n", name));
         fclose(fp);
-        exit(EXIT_FAILURE);
+        return EST_FALSE;
     }
-    
-    if ((size_t)fp_size > buffer_size) {
-        LOG_ERROR(("File %s size (%ld bytes) exceeds buffer capacity (%zu bytes)\n", name, fp_size, buffer_size));
+
+    if ((size_t)fp_size >= buffer_size) {   // need room for '\0'
+        LOG_ERROR(("File %s (%ld bytes) exceeds buffer (%zu)\n", name, fp_size, buffer_size));
         fclose(fp);
-        exit(EXIT_FAILURE);
+        return EST_FALSE;
     }
-    
-    fseek(fp, 0L, SEEK_SET);
+
+    rewind(fp);
 
     size_t res_len = (size_t)fp_size;
-    fread(output, res_len, 1, fp);
-    output[res_len] = '\0';
+    size_t got = fread(output, 1, res_len, fp);
     fclose(fp);
 
-    LOG_DEBUG(("%s(%d): \n", name, (int)res_len))
-    LOG_DEBUG(("%s\n", output))
+    if (got != res_len) {
+        LOG_ERROR(("Short read for %s (%zu/%zu)\n", name, got, res_len));
+        return EST_FALSE;
+    }
 
+    output[res_len] = '\0';
     return res_len;
 }
 
@@ -68,8 +76,6 @@ static MunitResult test_client_cacerts(const MunitParameter params[], void* data
     size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     LOG_INFO(("Using cacerts:\n%s\n", cacerts));
-
-    
 
     char implicit_ta[20000];
     size_t implicit_ta_len = 20000;
