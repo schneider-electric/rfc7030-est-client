@@ -5,9 +5,9 @@
 
 set -e
 
-if [ $# -ne 7 ]; then
-    echo "Usage: $0 <csr_directory> <est_server_url> <est_server_port> <p12_filename> <p12_pin> <label> <ca_chain_file>"
-    echo "Example: $0 /path/to/csr/files testrfc7030.com 8443 preenrollment.p12 12345 server1 ca-chain.pem"
+if [ $# -ne 8 ]; then
+    echo "Usage: $0 <csr_directory> <est_server_url> <est_server_port> <p12_filename> <p12_pin> <label> <ca_chain_file> <disable_rfc8951>"
+    echo "Example: $0 /path/to/csr/files testrfc7030.com 8443 preenrollment.p12 12345 server1 ca-chain.pem 1"
     exit 1
 fi
 
@@ -18,6 +18,7 @@ P12_FILENAME="$4"
 P12_PIN="$5"
 LABEL="$6"
 CA_CHAIN_FILE="$7"
+DISABLE_RFC8951="$8"
 
 EST_CLIENT="/usr/local/bin/rfc7030-est-client"
 
@@ -43,22 +44,50 @@ launch_est_client() {
     local csr_name=$(basename "$csr_file" .csr)
     
     echo "Processing: $csr_name"
-    
-    "$EST_CLIENT" \
-        -s "$EST_SERVER" \
-        -p "$EST_PORT" \
-        --label "$LABEL" \
-        --server-chain "$CA_CHAIN_FILE" \
-        --csr "$csr_file" \
-        --p12 "$p12_file" \
-        --p12-password "$P12_PIN" \
-        --output-ca "${csr_name}_cachain.pem" \
-        --output-crt "${csr_name}_certificate.pem" \
-        enroll
+
+    if [ "$DISABLE_RFC8951" -eq 1 ]; then
+        echo "RFC 8951 is disabled."
+        
+        "$EST_CLIENT" \
+            -s "$EST_SERVER" \
+            -p "$EST_PORT" \
+            -u \
+            --label "$LABEL" \
+            --server-chain "$CA_CHAIN_FILE" \
+            --csr "$csr_file" \
+            --p12 "$p12_file" \
+            --p12-password "$P12_PIN" \
+            --output-ca "${csr_name}_cachain.pem" \
+            --output-crt "${csr_name}_certificate.pem" \
+            enroll
+    else
+        "$EST_CLIENT" \
+            -s "$EST_SERVER" \
+            -p "$EST_PORT" \
+            --label "$LABEL" \
+            --server-chain "$CA_CHAIN_FILE" \
+            --csr "$csr_file" \
+            --p12 "$p12_file" \
+            --p12-password "$P12_PIN" \
+            --output-ca "${csr_name}_cachain.pem" \
+            --output-crt "${csr_name}_certificate.pem" \
+            enroll
+    fi
+
+    if [ -f ${csr_name}_certificate.pem ]; then
+        mv ${csr_name}_certificate.pem output/
+        mv ${csr_name}_cachain.pem output/
+        mv "$csr_file" output/
+        return 0
+    else
+        echo "Failure: Certificate not created for $csr_name."
+        return 1
+    fi
 }
 
 
 # Main processing
+mkdir -p output
 csr_files=$(find "$CSR_DIR" -name "*.csr" -type f)
 
 for csr_file in $csr_files; do
@@ -75,6 +104,8 @@ for csr_file in $csr_files; do
     }
     
     launch_est_client "$csr_file" "$p12_file" || echo "Failed: $csr_name"
+
+    sleep 5
 done
 
 echo "Completed!"
