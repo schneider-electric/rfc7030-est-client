@@ -339,8 +339,8 @@ int main(int argc, char *argv[]) {
             } else if(input_key_filename && input_cert_filename) {
                 LOG_INFO(("Use mTLS with PEM key and certificate\n"));
 
-                key_content_len = read_file(input_key_filename, "rt", key_content);
-                cert_content_len = read_file(input_cert_filename, "rt", cert_content);
+                key_content_len = read_file(input_key_filename, "rt", key_content, sizeof(key_content));
+                cert_content_len = read_file(input_cert_filename, "rt", cert_content, sizeof(cert_content));
                 if(!estCfg->parse_pem(key_content, key_content_len, cert_content, cert_content_len, &rfcConfig.auth, &err)) {
                     LOG_ERROR(("Invalid PEM key/cert (code=%d,native=%d,subsystem=%d): %s\n", err.code, err.native, err.subsystem, err.human));
                     failed = EST_TRUE;
