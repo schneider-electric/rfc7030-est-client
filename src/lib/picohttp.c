@@ -79,7 +79,7 @@ static bool_t parse_response(char *resp, size_t resp_current_len, PicoHttp_Ctx_t
 
     response_metadata->headers_len = num_headers;
     response_metadata->headers = (ESTHttp_Header_t *)malloc(sizeof(ESTHttp_Header_t) * num_headers);
-    memset(response_metadata->headers, 0, sizeof(sizeof(ESTHttp_Header_t) * num_headers));
+    memset(response_metadata->headers, 0, sizeof(ESTHttp_Header_t) * num_headers);
 
     // Store received body with a manual copy
     response_metadata->body_len = resp_current_len - ret;
@@ -175,7 +175,7 @@ bool_t picohttp_send(ESTHttp_Ctx_t *ctx, ESTHttp_ReqMetadata_t *request_metadata
     LOG_DEBUG(("HTTP req to send :\n%s\n", req))
     
     /* Send the http request. */
-    size_t write_res = pico_ctx->tint->send(pico_ctx->tint->pNetworkContext, req, req_len_raw);
+    int32_t write_res = pico_ctx->tint->send(pico_ctx->tint->pNetworkContext, req, req_len_raw);
     bool_t result = write_res >= 0;
 
     if(result) {
