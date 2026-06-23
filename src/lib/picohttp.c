@@ -94,8 +94,7 @@ static bool_t parse_response(char *resp, size_t resp_current_len, PicoHttp_Ctx_t
     for(int i = 0; i < num_headers; i++) {
         // Bound-check and copy header name
         size_t nlen = headers[i].name_len;
-        if (nlen > EST_HTTP_HEADER_NAME_LEN - 1) 
-        {
+        if (nlen > EST_HTTP_HEADER_NAME_LEN - 1) {
             nlen = EST_HTTP_HEADER_NAME_LEN - 1;
         }
         memcpy(response_metadata->headers[i].name, headers[i].name, nlen);
@@ -103,8 +102,7 @@ static bool_t parse_response(char *resp, size_t resp_current_len, PicoHttp_Ctx_t
         
         // Bound-check and copy header value
         size_t vlen = headers[i].value_len;
-        if (vlen > EST_HTTP_HEADER_VALUE_LEN - 1)
-        {
+        if (vlen > EST_HTTP_HEADER_VALUE_LEN - 1) {
             vlen = EST_HTTP_HEADER_VALUE_LEN - 1;
         }
         memcpy(response_metadata->headers[i].value, headers[i].value, vlen);
@@ -185,6 +183,10 @@ bool_t picohttp_send(ESTHttp_Ctx_t *ctx, ESTHttp_ReqMetadata_t *request_metadata
         size_t resp_current_len = 0;
         // Response data
         char *resp = (char *)malloc(resp_avail_size);
+        if (resp == NULL) {
+            LOG_ERROR(("Failed to allocate memory\n"))
+            return EST_FALSE;
+        }
         memset(resp, 0, resp_avail_size);
         
         char current_resp_data[HTTP_RESP_CHUNK_LEN];
@@ -203,6 +205,10 @@ bool_t picohttp_send(ESTHttp_Ctx_t *ctx, ESTHttp_ReqMetadata_t *request_metadata
                 resp_avail_size = resp_avail_size * 2;
                 // Realloc
                 resp = (char *)malloc(resp_avail_size);
+                if (resp == NULL) {
+                    LOG_ERROR(("Failed to allocate memory\n"))
+                    return EST_FALSE;
+                }
                 memset(resp, 0, resp_avail_size);
                 // Copy the buffer to the new location
                 memcpy(resp, tmp, resp_current_len);

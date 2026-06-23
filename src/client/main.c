@@ -107,7 +107,7 @@ static struct cag_option options[] = {
 };
 
 static size_t read_file(const char *name, const char *flags, char *output, size_t buffer_size) {
-    if (name == NULL || output == NULL || buffer_size == 0) {
+    if (name == NULL || output == NULL || buffer_size == 0 || flags == NULL) {
         return EST_FALSE;
     }
 

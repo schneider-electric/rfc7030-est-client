@@ -19,7 +19,6 @@ bool_t est_client_cacerts(const ESTClient_Options_t *opts, const char *host, int
     }
 
     if(!est_cacerts(output->ctx, &output->cacerts, err)) {
-        est_free(&output->ctx);
         return EST_FALSE;
     }
 

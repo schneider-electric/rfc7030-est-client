@@ -314,6 +314,27 @@ typedef struct {
     X509_REQ *req;
 } ESTCSR_impl_t;
 
+
+/**
+ * x509_csr_parse - Parse a Certificate Signing Request (CSR) from PEM or DER format
+ *
+ * @pem: Pointer to the CSR data buffer (PEM or DER encoded)
+ * @pem_bytes_len: Length of the CSR data in bytes
+ * @err: Pointer to ESTError_t structure for error reporting
+ *
+ * Description:
+ *   Parses a Certificate Signing Request from either PEM or DER format.
+ *   Attempts PEM format first, then falls back to DER format if PEM parsing fails.
+ *   Allocates memory for the ESTCSR_t structure which wraps the OpenSSL X509_REQ.
+ *
+ * Return:
+ *   On success: Pointer to ESTCSR_t structure containing the parsed CSR
+ *   On failure: NULL pointer (error details set in err structure)
+ *
+ * Note:
+ *   The caller is responsible for freeing the returned ESTCSR_t structure
+ *   using x509_csr_free() function.
+ */
 ESTCSR_t * x509_csr_parse(byte_t *pem, int pem_bytes_len, ESTError_t *err) {
     LOG_DEBUG(("Parse CSR, len=%d\n", pem_bytes_len))
 
@@ -365,6 +386,25 @@ ESTCSR_t * x509_csr_parse(byte_t *pem, int pem_bytes_len, ESTError_t *err) {
     return (ESTCSR_t *)csr;
 }
 
+
+/**
+ * x509_csr_free - Free a Certificate Signing Request structure
+ *
+ * @csr: Pointer to ESTCSR_t structure to be freed
+ *
+ * Description:
+ *   Frees the memory allocated for an ESTCSR_t structure and its associated
+ *   OpenSSL X509_REQ object. This function should be called when the CSR is
+ *   no longer needed to prevent memory leaks.
+ *
+ * Return:
+ *   EST_TRUE: Successfully freed the CSR structure
+ *   EST_FALSE: Failed (csr parameter is NULL)
+ *
+ * Note:
+ *   It is safe to call this function with a NULL pointer (returns EST_FALSE),
+ *   but the caller should check the return value if needed.
+ */
 bool_t x509_csr_free(ESTCSR_t *csr) {
     if (csr == NULL) {
         return EST_FALSE;
@@ -377,6 +417,26 @@ bool_t x509_csr_free(ESTCSR_t *csr) {
     return EST_TRUE;
 }
 
+/**
+ * x509_verify_cert_csr_pubkey - Verify that certificate and CSR have matching public keys
+ *
+ * @certificate: Pointer to ESTCertificate_t structure containing the certificate
+ * @csr: Pointer to ESTCSR_t structure containing the Certificate Signing Request
+ * @err: Pointer to ESTError_t structure for error reporting
+ *
+ * Description:
+ *   Extracts and compares the public keys from a certificate and CSR to verify
+ *   they match. This is a common verification step during certificate enrollment
+ *   to ensure the CSR was generated with the same key pair as the resulting certificate.
+ *
+ * Return:
+ *   EST_TRUE: Public keys match successfully
+ *   EST_FALSE: Public keys do not match, or an error occurred (error details set in err)
+ *
+ * Note:
+ *   The function manages EVP_PKEY memory internally and frees allocated resources
+ *   before returning.
+ */
 bool_t x509_verify_cert_csr_pubkey(ESTCertificate_t *certificate, ESTCSR_t *csr, ESTError_t *err) {
 
     if (err == NULL || certificate == NULL || csr == NULL) {
@@ -425,6 +485,26 @@ bool_t x509_verify_cert_csr_pubkey(ESTCertificate_t *certificate, ESTCSR_t *csr,
     return EST_TRUE;
 }
 
+/**
+ * x509_verify_cert_csr_subject - Verify that certificate and CSR have matching subjects
+ *
+ * @certificate: Pointer to ESTCertificate_t structure containing the certificate
+ * @csr: Pointer to ESTCSR_t structure containing the Certificate Signing Request
+ * @err: Pointer to ESTError_t structure for error reporting
+ *
+ * Description:
+ *   Extracts and compares the subject Distinguished  Names (DN) from a certificate
+ *   and CSR to verify they are identical. This verification ensures consistency
+ *   between the requested and issued certificate identities.
+ *
+ * Return:
+ *   EST_TRUE: Certificate and CSR subjects match
+ *   EST_FALSE: Subjects do not match, or an error occurred (error details set in err)
+ *
+ * Note:
+ *   Subject comparison is performed using X509_NAME_cmp which performs a strict
+ *   byte-by-byte comparison of the DER-encoded names.
+ */
 bool_t x509_verify_cert_csr_subject(ESTCertificate_t *certificate, ESTCSR_t *csr, ESTError_t *err) {
     if (err == NULL || certificate == NULL || csr == NULL) {
         LOG_ERROR(("Error parameter is NULL\n"));

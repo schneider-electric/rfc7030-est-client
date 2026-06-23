@@ -18,7 +18,7 @@ bool_t is_issuer(ESTCertificate_t *issuer, ESTCertificate_t *crt);
 bool_t pop_create_csr(void *ctx, const char *tlsunique, size_t tlsunique_len, byte_t *csr, size_t *csr_len, ESTError_t *err);
 
 static size_t read_file(const char *name, const char *flags, char *output, size_t buffer_size) {
-    if (name == NULL || output == NULL || buffer_size == 0) {
+    if (name == NULL || output == NULL || buffer_size == 0 || flags == NULL) {
         return EST_FALSE;
     }
 

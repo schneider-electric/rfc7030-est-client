@@ -292,8 +292,7 @@ static bool_t request_certificate_inner(RFC7030_Enroll_Options_t *config,
 
     oss_free_implicit_ta(&est_opts);
     int len = oss_crt2pem_noterminator((X509 *)enroll_output.enrolled, enrolled, enrolled_len);
-    if (len < 0) 
-    { 
+    if (len < 0) { 
         est_client_enroll_free(&enroll_output); return EST_FALSE; 
     }
     enrolled[len] = '\0';
@@ -301,8 +300,7 @@ static bool_t request_certificate_inner(RFC7030_Enroll_Options_t *config,
     int ca_idx_pt = 0;
     for(int i = 0; i < enroll_output.cacerts.chain_len; i++) {
         int n = oss_crt2pem_noterminator((X509 *)enroll_output.cacerts.chain[i], ca + ca_idx_pt, ca_len - ca_idx_pt);
-        if (n < 0) 
-        { 
+        if (n < 0) { 
             est_client_enroll_free(&enroll_output); return EST_FALSE; 
         }
         ca_idx_pt += n;
