@@ -17,26 +17,48 @@ bool_t crt_equals(ESTCertificate_t *received, ESTCertificate_t *expected);
 bool_t is_issuer(ESTCertificate_t *issuer, ESTCertificate_t *crt);
 bool_t pop_create_csr(void *ctx, const char *tlsunique, size_t tlsunique_len, byte_t *csr, size_t *csr_len, ESTError_t *err);
 
-static size_t read_file(const char *name, const char *flags, char *output) {
-    FILE *fp = fopen(name, flags);
-    if(!fp) {        
-        LOG_ERROR(("Failed to open %s from resource file\n", name))
-        exit(EXIT_FAILURE);
+static size_t read_file(const char *name, const char *flags, char *output, size_t buffer_size) {
+    if (name == NULL || output == NULL || buffer_size == 0 || flags == NULL) {
+        return EST_FALSE;
     }
 
-    fseek(fp, 0L, SEEK_END);
+    FILE *fp = fopen(name, flags);
+    if (!fp) {
+        LOG_ERROR(("Failed to open %s\n", name));
+        return EST_FALSE;
+    }
+
+    if (fseek(fp, 0L, SEEK_END) != 0) {
+        LOG_ERROR(("fseek failed for %s\n", name));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
     long fp_size = ftell(fp);
-    fseek(fp, 0L, SEEK_SET);
-    
-    size_t res_len = fp_size;
-    
-    fread(output, res_len, 1, fp);
-    output[res_len] = '\0';
+    if (fp_size < 0) {
+        LOG_ERROR(("ftell failed for %s\n", name));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
+    if ((size_t)fp_size >= buffer_size) {   // need room for '\0'
+        LOG_ERROR(("File %s (%ld bytes) exceeds buffer (%zu)\n", name, fp_size, buffer_size));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
+    rewind(fp);
+
+    size_t res_len = (size_t)fp_size;
+    size_t got = fread(output, 1, res_len, fp);
     fclose(fp);
 
-    LOG_DEBUG(("%s(%d): \n", name, (int)res_len))
-    LOG_DEBUG(("%s\n", output))
+    if (got != res_len) {
+        LOG_ERROR(("Short read for %s (%zu/%zu)\n", name, got, res_len));
+        return EST_FALSE;
+    }
 
+    output[res_len] = '\0';
     return res_len;
 }
 
@@ -51,11 +73,9 @@ static MunitResult test_client_cacerts(const MunitParameter params[], void* data
     LOG_INFO(("Using test folder:\n%s\n", res));
 
     char cacerts[20000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     LOG_INFO(("Using cacerts:\n%s\n", cacerts));
-
-    
 
     char implicit_ta[20000];
     size_t implicit_ta_len = 20000;
@@ -86,7 +106,7 @@ static MunitResult test_client_cacerts_invalid_est_ta(const MunitParameter param
     strcat(res, "/server-cert.pem");
 
     char cacerts[20000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     char implicit_ta[20000];
     size_t implicit_ta_len = 20000;
@@ -113,12 +133,12 @@ static MunitResult test_client_enroll_invalid_est_ta(const MunitParameter params
 
     strcat(res, EXPLICIT_TA_FILENAME);
     char cacerts[20000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/server.csr");
     char csr[5000];
-    size_t csr_len = read_file(res, "rt", csr);
+    size_t csr_len = read_file(res, "rt", csr, sizeof(csr));
 
     char implicit_ta[20000];
     size_t implicit_ta_len = 20000;
@@ -153,17 +173,17 @@ static MunitResult test_client_enroll_crt(const MunitParameter params[], void* d
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, EXPLICIT_TA_FILENAME);
     char cacerts[5000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
     
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/server.csr");
     char csr[5000];
-    size_t csr_len = read_file(res, "rt", csr);
+    size_t csr_len = read_file(res, "rt", csr, sizeof(csr));
 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/preenrollment.p12");
     char p12[5000];
-    size_t p12_len = read_file(res, "rb", p12);
+    size_t p12_len = read_file(res, "rb", p12, sizeof(p12));
 
     char implicit_ta[5000];
     size_t implicit_ta_len = 5000;
@@ -205,12 +225,12 @@ static MunitResult test_client_enroll_basic(const MunitParameter params[], void*
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, EXPLICIT_TA_FILENAME);
     char cacerts[5000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/server.csr");
     char csr[5000];
-    size_t csr_len = read_file(res, "rt", csr);
+    size_t csr_len = read_file(res, "rt", csr, sizeof(csr));
     
     char implicit_ta[5000];
     size_t implicit_ta_len = 5000;
@@ -252,17 +272,17 @@ static MunitResult test_client_renew(const MunitParameter params[], void* data) 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, EXPLICIT_TA_FILENAME);
     char cacerts[5000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/server.csr");
     char csr[5000];
-    size_t csr_len = read_file(res, "rt", csr);
+    size_t csr_len = read_file(res, "rt", csr, sizeof(csr));
 
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, "/preenrollment.p12");
     char p12[5000];
-    size_t p12_len = read_file(res, "rb", p12);
+    size_t p12_len = read_file(res, "rb", p12, sizeof(p12));
     
     char implicit_ta[5000];
     size_t implicit_ta_len = 5000;
@@ -307,7 +327,7 @@ static MunitResult test_client_enroll_basic_pop(const MunitParameter params[], v
     strcpy(res, getenv(TEST_RESOURCE_FOLDER));
     strcat(res, EXPLICIT_TA_FILENAME);
     char cacerts[5000];
-    size_t cacerts_len = read_file(res, "rt", cacerts);
+    size_t cacerts_len = read_file(res, "rt", cacerts, sizeof(cacerts));
 
     char key[5000];
     strcpy(key, getenv(TEST_RESOURCE_FOLDER));

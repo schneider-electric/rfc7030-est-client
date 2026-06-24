@@ -106,26 +106,48 @@ static struct cag_option options[] = {
     }
 };
 
-static size_t read_file(const char *name, const char *flags, char *output) {
-    FILE *fp = fopen(name, flags);
-    if(!fp) {        
-        LOG_ERROR(("Failed to open %s from resource file\n", name))
-        exit(EXIT_FAILURE);
+static size_t read_file(const char *name, const char *flags, char *output, size_t buffer_size) {
+    if (name == NULL || output == NULL || buffer_size == 0 || flags == NULL) {
+        return EST_FALSE;
     }
 
-    fseek(fp, 0L, SEEK_END);
+    FILE *fp = fopen(name, flags);
+    if (!fp) {
+        LOG_ERROR(("Failed to open %s\n", name));
+        return EST_FALSE;
+    }
+
+    if (fseek(fp, 0L, SEEK_END) != 0) {
+        LOG_ERROR(("fseek failed for %s\n", name));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
     long fp_size = ftell(fp);
-    fseek(fp, 0L, SEEK_SET);
-    
-    size_t res_len = fp_size;
-    
-    fread(output, res_len, 1, fp);
-    output[res_len] = '\0';
+    if (fp_size < 0) {
+        LOG_ERROR(("ftell failed for %s\n", name));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
+    if ((size_t)fp_size >= buffer_size) {   // need room for '\0'
+        LOG_ERROR(("File %s (%ld bytes) exceeds buffer (%zu)\n", name, fp_size, buffer_size));
+        fclose(fp);
+        return EST_FALSE;
+    }
+
+    rewind(fp);
+
+    size_t res_len = (size_t)fp_size;
+    size_t got = fread(output, 1, res_len, fp);
     fclose(fp);
 
-    LOG_DEBUG(("%s(%d): \n", name, (int)res_len))
-    LOG_DEBUG(("%s\n", output))
+    if (got != res_len) {
+        LOG_ERROR(("Short read for %s (%zu/%zu)\n", name, got, res_len));
+        return EST_FALSE;
+    }
 
+    output[res_len] = '\0';
     return res_len;
 }
 
@@ -276,7 +298,7 @@ int main(int argc, char *argv[]) {
     }
 
     if(chain_filename) {
-        chain_content_len = read_file(chain_filename, "rt", chain_content);
+        chain_content_len = read_file(chain_filename, "rt", chain_content, sizeof(chain_content));
     } else if(!skip_tls_verify) {
         LOG_ERROR(("Please choose one of insecure flag or server chain flag.\n"));
         failed = EST_TRUE;
@@ -292,6 +314,9 @@ int main(int argc, char *argv[]) {
 
     if(!skip_tls_verify) {
         rfcConfig.opts.cachain = chain_content;
+    } else {
+        LOG_ERROR(("TLS verification DISABLED (--insecure). Not safe for production.\n"))
+        return EXIT_FAILURE;
     }
 
     rfcConfig.opts.label = label;
@@ -303,7 +328,7 @@ int main(int argc, char *argv[]) {
             LOG_ERROR(("Missing csr parameter\n"));
             failed = EST_TRUE;
         } else {
-            csr_content_len = read_file(csr_filename, "rt", csr_content);
+            csr_content_len = read_file(csr_filename, "rt", csr_content, sizeof(csr_content));
             rfcConfig.csr_ctx = (CsrCtx_t *)csr_content;
         }
 
@@ -314,7 +339,7 @@ int main(int argc, char *argv[]) {
             if(p12_filename) {
                 LOG_INFO(("Use mTLS X.509 Certificate authentication\n"));
 
-                p12_content_len = read_file(p12_filename, "rb", p12_content);
+                p12_content_len = read_file(p12_filename, "rb", p12_content, sizeof(p12_content));
                 if(!estCfg->parse_p12(p12_content, p12_content_len, p12_password, &rfcConfig.auth, &err)) {
                     LOG_ERROR(("Invalid p12 (code=%d,native=%d,subsystem=%d): %s\n", err.code, err.native, err.subsystem, err.human));
                     failed = EST_TRUE;
@@ -322,8 +347,8 @@ int main(int argc, char *argv[]) {
             } else if(input_key_filename && input_cert_filename) {
                 LOG_INFO(("Use mTLS with PEM key and certificate\n"));
 
-                key_content_len = read_file(input_key_filename, "rt", key_content);
-                cert_content_len = read_file(input_cert_filename, "rt", cert_content);
+                key_content_len = read_file(input_key_filename, "rt", key_content, sizeof(key_content));
+                cert_content_len = read_file(input_cert_filename, "rt", cert_content, sizeof(cert_content));
                 if(!estCfg->parse_pem(key_content, key_content_len, cert_content, cert_content_len, &rfcConfig.auth, &err)) {
                     LOG_ERROR(("Invalid PEM key/cert (code=%d,native=%d,subsystem=%d): %s\n", err.code, err.native, err.subsystem, err.human));
                     failed = EST_TRUE;
@@ -358,10 +383,10 @@ int main(int argc, char *argv[]) {
             }
         }
         
-        LOG_INFO(("CACerts:\n"));
-        LOG_INFO(("%s\n", cacerts_pem));
-        LOG_INFO(("Enrolled certificate:\n"));
-        LOG_INFO(("%s\n", enrolled));
+        LOG_DEBUG(("CACerts:\n"));
+        LOG_DEBUG(("%s\n", cacerts_pem));
+        LOG_DEBUG(("Enrolled certificate:\n"));
+        LOG_DEBUG(("%s\n", enrolled));
 
         if(output_ca) {
             if(!write_file(output_ca, "wt", cacerts_pem)) {
@@ -384,8 +409,8 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
         
-        LOG_INFO(("CACerts:\n"));
-        LOG_INFO(("%s\n", cacerts_pem));
+        LOG_DEBUG(("CACerts:\n"));
+        LOG_DEBUG(("%s\n", cacerts_pem));
 
         if(output_ca) {
             if(!write_file(output_ca, "wt", cacerts_pem)) {

@@ -19,7 +19,6 @@ bool_t est_client_cacerts(const ESTClient_Options_t *opts, const char *host, int
     }
 
     if(!est_cacerts(output->ctx, &output->cacerts, err)) {
-        est_free(&output->ctx);
         return EST_FALSE;
     }
 
@@ -44,6 +43,7 @@ static bool_t est_client_enroll_internal(const ESTClient_Options_t *opts,
     memset(&cacerts_ctx, 0, sizeof(cacerts_ctx));
 
     if(!est_client_cacerts(opts, host, port, &cacerts_ctx, err)) {
+        est_client_cacerts_free(&cacerts_ctx);
         return EST_FALSE;
     }
 
@@ -57,7 +57,7 @@ static bool_t est_client_enroll_internal(const ESTClient_Options_t *opts,
     auth_opts.skip_tls_verify = opts->skip_tls_verify;
     auth_opts.use_pop = opts->use_pop;
     auth_opts.get_csr = opts->get_csr;
-    strcpy(auth_opts.label, opts->label);
+    snprintf(auth_opts.label, sizeof(auth_opts.label), "%s", opts->label);
     // replace explicit TA with the new implicit TA
     auth_opts.chain = cacerts_ctx.cacerts.chain;
     auth_opts.chain_len = cacerts_ctx.cacerts.chain_len;
